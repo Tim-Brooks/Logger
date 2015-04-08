@@ -42,7 +42,7 @@ public class LogWriter implements Runnable {
     }
 
     public void safeStop(long timeout, TimeUnit unit) throws InterruptedException {
-        if (timeout == -1.0) {
+        if (timeout == -1) {
             queue.put(sentinel);
         } else {
             queue.offer(sentinel, timeout, unit);
