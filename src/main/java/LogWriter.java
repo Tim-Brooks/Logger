@@ -111,8 +111,8 @@ public class LogWriter implements Runnable {
     }
 
     private boolean handleMessage(ByteBuffer buffer, FileChannel channel, Object message) {
-        String logMessage = logLine(message);
-        byte[] bytes = logMessage.getBytes();
+        String serializedMessage = logSerializer.serialize(message);
+        byte[] bytes = serializedMessage.getBytes();
         int messageSize = bytes.length;
         if (messageSize > pageSize) {
             throw new RuntimeException("Message is too Long!");
@@ -127,11 +127,6 @@ public class LogWriter implements Runnable {
             buffer.put(bytes, 0, messageSize);
             return false;
         }
-    }
-
-    private String logLine(Object logMessage) {
-        String serializedMessage = logSerializer.serialize(logMessage);
-        return serializedMessage + "\n";
     }
 
     private void flushBuffer(ByteBuffer buffer, FileChannel channel) {

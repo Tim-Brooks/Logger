@@ -4,6 +4,6 @@
 public class NoOpSerializer implements LogSerializer {
     @Override
     public String serialize(Object object) {
-        return object.toString();
+        return object.toString() + "\n";
     }
 }
