@@ -104,8 +104,12 @@ public class LogWriter implements Runnable {
             throw new RuntimeException("Message is too Long!");
         } else if (messageSize > buffer.remaining()) {
             flushBuffer(buffer, channel);
+        } else if (messageSize == buffer.remaining()) {
+            buffer.put(bytes, 0, messageSize);
+            flushBuffer(buffer, channel);
+        } else {
+            buffer.put(bytes, 0, messageSize);
         }
-        buffer.put(bytes, 0, messageSize);
     }
 
     private String logLine(Object logMessage) {
