@@ -3,12 +3,18 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * Created by timbrooks on 4/8/15.
@@ -29,27 +35,29 @@ public class LogWriterTest {
         config.put("fileSize", 64);
 
         FileNameGenerator fileNameFn = new FileNameGenerator();
-        System.out.println(fileNameFn.generateFileName());
-        System.out.println(fileNameFn.generateFileName());
-        this.writer = new LogWriter(config, queue, new JsonLogSerializer(), fileNameFn, new ErrorHandler());
+        this.writer = new LogWriter(config, queue, new NoOpSerializer(), fileNameFn, new ErrorHandler());
     }
 
     @Test
     public void testBufferNotFlushedPageSizeNotMet() throws Exception {
         new Thread(writer).start();
 
+        char[] chars = "abcdefghijklmnopqrstuvwxyz".toCharArray();
+        byte[] message = new byte[15];
+        Random random = new Random();
+        for (int i = 0; i < message.length; ++i) {
+            message[i] = (byte) chars[random.nextInt(25)];
+        }
 
-        queue.add("Lolzer");
+        String stringMessage = new String(message);
+
+        queue.add(stringMessage);
 
         writer.safeStop(-1, TimeUnit.MILLISECONDS);
 
-    }
+        BufferedReader reader = new BufferedReader(new FileReader(new File(folder.getRoot(), "log0")));
+        assertEquals(stringMessage, reader.readLine());
 
-    private static class JsonLogSerializer implements LogSerializer {
-        @Override
-        public String serialize(Object object) {
-            return object.toString();
-        }
     }
 
     private class FileNameGenerator implements FileNameFn {
@@ -57,7 +65,7 @@ public class LogWriterTest {
 
         @Override
         public String generateFileName() {
-            File file = new File(folder.getRoot(), "log" + ++count);
+            File file = new File(folder.getRoot(), "log" + count++);
             return file.getPath();
         }
     }

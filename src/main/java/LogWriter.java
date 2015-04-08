@@ -5,6 +5,9 @@ import java.nio.channels.FileChannel;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Created by timbrooks on 3/25/15.
@@ -18,6 +21,8 @@ public class LogWriter implements Runnable {
     private final ErrorCallback errorCallback;
     private final BlockingQueue<Object> queue;
     private final Object sentinel = new Object();
+    private final Lock shutdownLock = new ReentrantLock();
+    private final Condition shutdownCondition = shutdownLock.newCondition();
     private volatile boolean running = true;
 
     public LogWriter(Map<String, Integer> configs, BlockingQueue<Object> queue, FileNameFn fileNameFn) {
@@ -51,6 +56,16 @@ public class LogWriter implements Runnable {
             queue.put(sentinel);
         } else {
             queue.offer(sentinel, timeout, unit);
+        }
+        try {
+            shutdownLock.lock();
+            if (timeout == -1) {
+                shutdownCondition.await();
+            } else {
+                shutdownCondition.await(timeout, unit);
+            }
+        } finally {
+            shutdownLock.unlock();
         }
     }
 
@@ -111,6 +126,12 @@ public class LogWriter implements Runnable {
     private void shutdown(ByteBuffer buffer, FileChannel channel) {
         running = false;
         flushBuffer(buffer, channel);
+        try {
+            shutdownLock.lock();
+            shutdownCondition.signalAll();
+        } finally {
+            shutdownLock.unlock();
+        }
     }
 }
 
