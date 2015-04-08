@@ -17,7 +17,6 @@ public class LogWriter implements Runnable {
     private final FileNameFn fileNameFn;
     private final ErrorCallback errorCallback;
     private final BlockingQueue<Object> queue;
-    private volatile int fence = 1;
 
     public LogWriter(BlockingQueue<Object> queue, LogSerializer logSerializer, FileNameFn fileNameFn, ErrorCallback
             errorCallback) {
@@ -29,25 +28,10 @@ public class LogWriter implements Runnable {
 
     @Override
     public void run() {
-        ByteBuffer buffer = ByteBuffer.allocate(PAGE_SIZE);
-        final AtomicReference<String> filepath = new AtomicReference<>(fileNameFn.generateFileName());
-
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (fence == 1) {
-                    try (FileChannel channel = new RandomAccessFile(filepath.get(), "rw").getChannel()) {
-                        flushBuffer(buffer, channel);
-                    } catch (IOException e) {
-                        errorCallback.error(e);
-                    }
-                }
-            }
-        }));
+        final ByteBuffer buffer = ByteBuffer.allocate(PAGE_SIZE);
 
         while (true) {
-            writer(filepath.get(), buffer);
-            filepath.set(fileNameFn.generateFileName());
+            writer(fileNameFn.generateFileName(), buffer);
         }
     }
 
