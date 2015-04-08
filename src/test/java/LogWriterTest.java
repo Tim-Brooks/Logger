@@ -58,6 +58,18 @@ public class LogWriterTest {
         assertEquals(message, lines.get(0));
         assertEquals(message2, lines.get(1));
 
+        String message3 = generateMessage(1);
+
+        assertEquals(2, pollForFileLines(logFile, 2, 100).size());
+        queue.add(message3);
+
+        String message4 = generateMessage(15);
+        queue.add(message4);
+
+        lines = pollForFileLines(logFile, 3, 100);
+        assertEquals(3, lines.size());
+        assertEquals(message3, lines.get(2));
+
 
         writer.safeStop(1000, TimeUnit.MILLISECONDS);
 
