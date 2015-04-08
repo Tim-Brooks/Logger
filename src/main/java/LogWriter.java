@@ -54,8 +54,9 @@ public class LogWriter implements Runnable {
         }
     }
 
-    public void unsafeStop() {
+    public void unsafeStop() throws InterruptedException {
         this.running = false;
+        queue.put(sentinel);
     }
 
     private void write(String filePath, ByteBuffer buffer) {
