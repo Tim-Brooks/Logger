@@ -75,6 +75,44 @@ public class LogWriterTest {
 
     }
 
+    @Test
+    public void testFileRollsOverWhenMaxWritesMet() throws Exception {
+        File logFile = fileNameFn.getCurrentFile();
+
+        new Thread(writer).start();
+        for (int i = 0; i < 4; ++i) {
+            queue.add(generateMessage(15));
+        }
+        assertTrue(pollForFile(logFile, 100));
+        assertEquals(4, pollForFileLines(logFile, 4, 100).size());
+
+        String message = generateMessage(15);
+        queue.add(message);
+
+        logFile = nextLogFile(logFile, 100);
+        pollForFile(logFile, 100);
+
+        List<String> lines = pollForFileLines(logFile, 1, 100);
+        assertEquals(1, lines.size());
+        assertEquals(message, lines.get(0));
+
+    }
+
+    private File nextLogFile(File logFile, long millisTimeout) throws Exception {
+        long timeSpentPolling = 0;
+        long start = System.currentTimeMillis();
+        while (millisTimeout > timeSpentPolling) {
+            Thread.sleep(10);
+            File next = fileNameFn.getCurrentFile();
+            if (next != logFile) {
+                return next;
+            }
+            timeSpentPolling = System.currentTimeMillis() - start;
+        }
+
+        throw new RuntimeException("Log file did not rotate.");
+    }
+
     private boolean pollForFile(File file, long millisTimeout) throws Exception {
         long timeSpentPolling = 0;
         long start = System.currentTimeMillis();

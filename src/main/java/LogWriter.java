@@ -78,14 +78,10 @@ public class LogWriter implements Runnable {
 
         try (FileChannel channel = new RandomAccessFile(filePath, "rw").getChannel()) {
             for (int i = 0; i < maxWriteCount; ++i) {
-                Object message = queue.take();
-                if (message != sentinel) {
-                    handleMessage(buffer, channel, message);
-                } else {
-                    shutdown(buffer, channel);
-                }
+                writePage(buffer, channel);
+
                 if (!running) {
-                    return;
+                    break;
                 }
             }
         } catch (IOException e) {
@@ -96,7 +92,25 @@ public class LogWriter implements Runnable {
         }
     }
 
-    private void handleMessage(ByteBuffer buffer, FileChannel channel, Object message) {
+    private void writePage(ByteBuffer buffer, FileChannel channel) throws InterruptedException {
+        while (true) {
+            Object message = queue.take();
+            if (message != sentinel) {
+                boolean bufferFlushed = handleMessage(buffer, channel, message);
+                if (bufferFlushed) {
+                    break;
+                }
+            } else {
+                shutdown(buffer, channel);
+                break;
+            }
+            if (!running) {
+                break;
+            }
+        }
+    }
+
+    private boolean handleMessage(ByteBuffer buffer, FileChannel channel, Object message) {
         String logMessage = logLine(message);
         byte[] bytes = logMessage.getBytes();
         int messageSize = bytes.length;
@@ -104,11 +118,14 @@ public class LogWriter implements Runnable {
             throw new RuntimeException("Message is too Long!");
         } else if (messageSize > buffer.remaining()) {
             flushBuffer(buffer, channel);
+            return true;
         } else if (messageSize == buffer.remaining()) {
             buffer.put(bytes, 0, messageSize);
             flushBuffer(buffer, channel);
+            return true;
         } else {
             buffer.put(bytes, 0, messageSize);
+            return false;
         }
     }
 
