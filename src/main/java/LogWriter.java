@@ -77,8 +77,15 @@ public class LogWriter implements Runnable {
     private void write(String filePath, ByteBuffer buffer) {
 
         try (FileChannel channel = new RandomAccessFile(filePath, "rw").getChannel()) {
-            for (int i = 0; i < maxWriteCount; ++i) {
-                writePage(buffer, channel);
+            int pagesWritten = 0;
+            while (pagesWritten < maxWriteCount) {
+                Object message = queue.take();
+                if (message != sentinel) {
+                    pagesWritten = pagesWritten + handleMessage(buffer, channel, message);
+                } else {
+                    shutdown(buffer, channel);
+                    break;
+                }
 
                 if (!running) {
                     break;
@@ -92,41 +99,37 @@ public class LogWriter implements Runnable {
         }
     }
 
-    private void writePage(ByteBuffer buffer, FileChannel channel) throws InterruptedException {
-        while (true) {
-            Object message = queue.take();
-            if (message != sentinel) {
-                boolean bufferFlushed = handleMessage(buffer, channel, message);
-                if (bufferFlushed) {
-                    break;
-                }
-            } else {
-                shutdown(buffer, channel);
-                break;
-            }
-            if (!running) {
-                break;
-            }
-        }
-    }
-
-    private boolean handleMessage(ByteBuffer buffer, FileChannel channel, Object message) {
+    private int handleMessage(ByteBuffer buffer, FileChannel channel, Object message) {
         String serializedMessage = logSerializer.serialize(message);
         byte[] bytes = serializedMessage.getBytes();
         int messageSize = bytes.length;
         if (messageSize > pageSize) {
-            throw new RuntimeException("Message is too Long!");
+            return flushLargeMessage(buffer, channel, bytes);
         } else if (messageSize > buffer.remaining()) {
             flushBuffer(buffer, channel);
-            return true;
+            return 1;
         } else if (messageSize == buffer.remaining()) {
             buffer.put(bytes, 0, messageSize);
             flushBuffer(buffer, channel);
-            return true;
+            return 1;
         } else {
             buffer.put(bytes, 0, messageSize);
-            return false;
+            return 0;
         }
+    }
+
+    private int flushLargeMessage(ByteBuffer buffer, FileChannel channel, byte[] bytes) {
+        int i = 0;
+        int pagesWritten = 0;
+        for (byte b : bytes) {
+            buffer.put(b);
+            if (++i == pageSize) {
+                flushBuffer(buffer, channel);
+                ++pagesWritten;
+            }
+        }
+        flushBuffer(buffer, channel);
+        return ++pagesWritten;
     }
 
     private void flushBuffer(ByteBuffer buffer, FileChannel channel) {
