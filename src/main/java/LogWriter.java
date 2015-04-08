@@ -20,6 +20,10 @@ public class LogWriter implements Runnable {
     private final Object sentinel = new Object();
     private volatile boolean running = true;
 
+    public LogWriter(BlockingQueue<Object> queue, FileNameFn fileNameFn) {
+        this(queue, new NoOpSerializer(), fileNameFn, new DefaultErrorHandler());
+    }
+
     public LogWriter(BlockingQueue<Object> queue, LogSerializer logSerializer, FileNameFn fileNameFn, ErrorCallback
             errorCallback) {
         this.queue = queue;
