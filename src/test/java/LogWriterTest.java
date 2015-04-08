@@ -6,15 +6,12 @@ import org.junit.rules.TemporaryFolder;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.IOException;
-import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -27,6 +24,7 @@ public class LogWriterTest {
 
     private LogWriter writer;
     private BlockingQueue<Object> queue;
+    private FileNameGenerator fileNameFn;
 
     @Before
     public void setUp() {
@@ -35,13 +33,13 @@ public class LogWriterTest {
         config.put("pageSize", 16);
         config.put("fileSize", 64);
 
-        FileNameGenerator fileNameFn = new FileNameGenerator();
+        this.fileNameFn = new FileNameGenerator(folder.getRoot());
         this.writer = new LogWriter(config, queue, new NoOpSerializer(), fileNameFn, new ErrorHandler());
     }
 
     @Test
-    public void testBufferNotFlushedUntilPageSizeMet() throws Exception {
-        File logFile = new File(folder.getRoot(), "log0");
+    public void testBufferFlushedWhenPageSizeMet() throws Exception {
+        File logFile = fileNameFn.getCurrentFile();
 
         new Thread(writer).start();
 
@@ -53,18 +51,19 @@ public class LogWriterTest {
 
         String message2 = generateMessage(7);
         queue.add(message2);
-        
+
         List<String> lines = pollForFileLines(logFile, 2, 100);
 
         assertEquals(2, lines.size());
         assertEquals(message, lines.get(0));
         assertEquals(message2, lines.get(1));
 
+
         writer.safeStop(1000, TimeUnit.MILLISECONDS);
 
     }
 
-    private boolean pollForFile(File file, long millisTimeout) throws Exception{
+    private boolean pollForFile(File file, long millisTimeout) throws Exception {
         long timeSpentPolling = 0;
         long start = System.currentTimeMillis();
         while (millisTimeout > timeSpentPolling) {
@@ -106,16 +105,6 @@ public class LogWriterTest {
             Thread.sleep(10);
         }
         return lines;
-    }
-
-    private class FileNameGenerator implements FileNameFn {
-        volatile int count = 0;
-
-        @Override
-        public String generateFileName() {
-            File file = new File(folder.getRoot(), "log" + count++);
-            return file.getPath();
-        }
     }
 
     private static class ErrorHandler implements ErrorCallback {
