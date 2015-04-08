@@ -1,3 +1,5 @@
+package main.java;
+
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -39,8 +41,22 @@ public class Main {
 //        System.out.println(j.join());
 
         BlockingQueue<Object> queue = new ArrayBlockingQueue<>(10000);
-        LogWriter logWriter = new LogWriter(queue, object -> "New line bro2", () -> "/Users/timbrooks/Desktop/fuck",
-                Throwable::printStackTrace);
+        LogWriter logWriter = new LogWriter(queue, new LogSerializer() {
+            @Override
+            public String serialize(Object object) {
+                return "New line bro2";
+            }
+        }, new FileNameFn() {
+            @Override
+            public String generateFileName() {
+                return "/Users/timbrooks/Desktop/nooo";
+            }
+        }, new ErrorCallback() {
+            @Override
+            public void error(Throwable throwable) {
+                throwable.printStackTrace();
+            }
+        });
 
         for (int i = 0; i < 1000; ++i) {
             queue.add(i);
