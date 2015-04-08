@@ -34,7 +34,7 @@ public class LogWriterTest {
         config.put("fileSize", 64);
 
         this.fileNameFn = new FileNameGenerator(folder.getRoot());
-        this.writer = new LogWriter(config, queue, new NoOpSerializer(), fileNameFn, new ErrorHandler());
+        this.writer = new LogWriter(config, queue, fileNameFn);
     }
 
     @Test
@@ -155,12 +155,5 @@ public class LogWriterTest {
             Thread.sleep(10);
         }
         return lines;
-    }
-
-    private static class ErrorHandler implements ErrorCallback {
-        @Override
-        public void error(Throwable error) {
-
-        }
     }
 }
