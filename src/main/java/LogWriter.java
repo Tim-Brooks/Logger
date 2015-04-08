@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -10,9 +11,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class LogWriter implements Runnable {
 
-    private final static int FILE_SIZE = 536870912;
-    private final static int PAGE_SIZE = 4096;
-    private final static int MAX_WRITE_COUNT = 131072;
+    private final int pageSize;
+    private final int maxWriteCount;
     private final LogSerializer logSerializer;
     private final FileNameFn fileNameFn;
     private final ErrorCallback errorCallback;
@@ -20,12 +20,17 @@ public class LogWriter implements Runnable {
     private final Object sentinel = new Object();
     private volatile boolean running = true;
 
-    public LogWriter(BlockingQueue<Object> queue, FileNameFn fileNameFn) {
-        this(queue, new NoOpSerializer(), fileNameFn, new DefaultErrorHandler());
+    public LogWriter(Map<String, Integer> configs, BlockingQueue<Object> queue, FileNameFn fileNameFn) {
+        this(configs, queue, new NoOpSerializer(), fileNameFn, new DefaultErrorHandler());
     }
 
-    public LogWriter(BlockingQueue<Object> queue, LogSerializer logSerializer, FileNameFn fileNameFn, ErrorCallback
-            errorCallback) {
+    public LogWriter(Map<String, Integer> configs, BlockingQueue<Object> queue, LogSerializer logSerializer,
+                     FileNameFn fileNameFn, ErrorCallback errorCallback) {
+        Integer configPageSize = configs.get("pageSize");
+        Integer configFileSize = configs.get("fileSize");
+        this.pageSize = configPageSize == null ? 4096 : configPageSize;
+        int fileSize = configFileSize == null ? 536870912 : configFileSize;
+        this.maxWriteCount = fileSize / pageSize;
         this.queue = queue;
         this.logSerializer = logSerializer;
         this.fileNameFn = fileNameFn;
@@ -34,10 +39,10 @@ public class LogWriter implements Runnable {
 
     @Override
     public void run() {
-        final ByteBuffer buffer = ByteBuffer.allocate(PAGE_SIZE);
+        final ByteBuffer buffer = ByteBuffer.allocate(pageSize);
 
         while (running) {
-            writer(fileNameFn.generateFileName(), buffer);
+            write(fileNameFn.generateFileName(), buffer);
         }
     }
 
@@ -53,15 +58,18 @@ public class LogWriter implements Runnable {
         this.running = false;
     }
 
-    private void writer(String filePath, ByteBuffer buffer) {
+    private void write(String filePath, ByteBuffer buffer) {
 
         try (FileChannel channel = new RandomAccessFile(filePath, "rw").getChannel()) {
-            for (int i = 0; i < MAX_WRITE_COUNT; ++i) {
+            for (int i = 0; i < maxWriteCount; ++i) {
                 Object message = queue.take();
                 if (message != sentinel) {
                     handleMessage(buffer, channel, message);
                 } else {
                     shutdown(buffer, channel);
+                }
+                if (!running) {
+                    return;
                 }
             }
         } catch (IOException e) {
@@ -76,7 +84,7 @@ public class LogWriter implements Runnable {
         String logMessage = logLine(message);
         byte[] bytes = logMessage.getBytes();
         int messageSize = bytes.length;
-        if (messageSize > PAGE_SIZE) {
+        if (messageSize > pageSize) {
             throw new RuntimeException("Message is too Long!");
         } else if (messageSize > buffer.remaining()) {
             flushBuffer(buffer, channel);

@@ -1,6 +1,8 @@
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -14,9 +16,9 @@ public class LogWriterTest {
     @Before
     public void setUp() {
         BlockingQueue<Object> queue = new ArrayBlockingQueue<>(1000);
-        this.writer = new LogWriter(queue, new JsonLogSerializer(),
-                new FileNameGenerator(),
-                new ErrorHandler());
+        Map<String, Integer> config = new HashMap<>();
+
+        this.writer = new LogWriter(config, queue, new JsonLogSerializer(), new FileNameGenerator(), new ErrorHandler());
     }
 
     @Test
